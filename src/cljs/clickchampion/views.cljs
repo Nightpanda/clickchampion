@@ -28,20 +28,32 @@
       (fn render-listener [args]
         (into [f a] args))})))
 
+(defn get-username []
+  (let [uid (re-frame/subscribe [::subs/user-uid])]
+    (.once (db-ref (str "users/" @uid))
+      "value"
+      (fn received-db [snapshot]
+        (re-frame/dispatch [::events/set-username (.val snapshot)])))))
+
+(defn get-clicks []
+  (let [uid (re-frame/subscribe [::subs/user-uid])]
+    (.once (db-ref (str "clicks/" @uid))
+      "value"
+      (fn received-db [snapshot]  
+        (re-frame/dispatch [::events/set-clicks (.val snapshot)])))))
+
 (.onAuthStateChanged
   (.auth js/firebase)
   (fn auth-state-changed [user-obj]
     (if (nil? user-obj)
-      (re-frame/dispatch [::events/set-logged-in false])
-
+      (do
+        (re-frame/dispatch [::events/set-user-uid nil])
+        (re-frame/dispatch [::events/set-logged-in false]))
       (do
         (re-frame/dispatch [::events/set-logged-in true])
         (re-frame/dispatch [::events/set-user-uid (.-uid user-obj)])
-        (let [uid (re-frame/subscribe [::subs/user-uid])]
-          (.once (db-ref (str "users/" @uid))
-                 "value"
-                 (fn received-db [snapshot]
-                   (re-frame/dispatch [::events/set-username (.val snapshot)]))))
+        (get-username)
+        (get-clicks)
         (let [username (re-frame/subscribe [::subs/username])]
           (.updateProfile user-obj (js-obj "displayName" @username))))))
   (fn auth-error [error] (js/console.log error)))
@@ -65,12 +77,16 @@
     (fn []
       [:div
         [:p "Welcome back! " @username]
-        [on (str "clicks/" @user-uid) (fn [a]
-                                       (re-frame/dispatch [::events/set-clicks @a]))]
-        [:div "Your clicks: " @clicks]
-      
-        [:button {:on-click (fn [] (do (re-frame/dispatch [::events/set-clicks (inc @clicks)])
-                                      (save-clicks @user-uid (inc @clicks))))}
+        (if (nil? @clicks)
+          [:div "Your clicks: " 0]
+          [on (str "clicks/" @user-uid) 
+            (fn [a]
+              [:div "Your clicks: " @a]
+              )])
+        [:button {:on-click 
+                    (fn []
+                      (do (re-frame/dispatch [::events/set-clicks (inc @clicks)])
+                      (save-clicks @user-uid (inc @clicks))))}
         "Click me"]
        logout-button])))
 
