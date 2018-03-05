@@ -3,8 +3,7 @@
             [re-com.core :as re-com]
             [clickchampion.subs :as subs]
             [clickchampion.events :as events]
-            [reagent.core :as r]
-            ))
+            [reagent.core :as r]))
 
 (def db (.database js/firebase))
 
@@ -28,19 +27,18 @@
       (fn render-listener [args]
         (into [f a] args))})))
 
-(defn get-username []
+(defn get-username! []
   (let [uid (re-frame/subscribe [::subs/user-uid])]
     (.once (db-ref (str "users/" @uid))
       "value"
       (fn received-db [snapshot]
         (re-frame/dispatch [::events/set-username (.val snapshot)])))))
 
-(defn get-clicks []
-  (let [uid (re-frame/subscribe [::subs/user-uid])]
-    (.once (db-ref (str "clicks/" @uid))
-      "value"
-      (fn received-db [snapshot]  
-        (re-frame/dispatch [::events/set-clicks (.val snapshot)])))))
+(defn get-clicks! [uid]
+  (.once (db-ref (str "clicks/" uid))
+    "value"
+    (fn received-db [snapshot]  
+      (re-frame/dispatch [::events/set-clicks (.val snapshot)]))))
 
 (.onAuthStateChanged
   (.auth js/firebase)
@@ -51,11 +49,7 @@
         (re-frame/dispatch [::events/set-logged-in false]))
       (do
         (re-frame/dispatch [::events/set-logged-in true])
-        (re-frame/dispatch [::events/set-user-uid (.-uid user-obj)])
-        (get-username)
-        (get-clicks)
-        (let [username (re-frame/subscribe [::subs/username])]
-          (.updateProfile user-obj (js-obj "displayName" @username))))))
+        (re-frame/dispatch [::events/set-user-uid (.-uid user-obj)]))))
   (fn auth-error [error] (js/console.log error)))
 
 (defn provider []  (new js/firebase.auth.GoogleAuthProvider))
@@ -74,15 +68,14 @@
   (let [username (re-frame/subscribe [::subs/username])
         user-uid (re-frame/subscribe [::subs/user-uid])
         clicks (re-frame/subscribe [::subs/clicks])]
+    (.updateProfile (.-currentUser (.auth js/firebase)) (js-obj "displayName" @username))
     (fn []
       [:div
         [:p "Welcome back! " @username]
-        (if (nil? @clicks)
-          [:div "Your clicks: " 0]
           [on (str "clicks/" @user-uid) 
             (fn [a]
-              [:div "Your clicks: " @a]
-              )])
+              (let [current-clicks (if (nil? @a) 0 @a)]
+                [:div "Your clicks: " current-clicks]))]
         [:button {:on-click 
                     (fn []
                       (do (re-frame/dispatch [::events/set-clicks (inc @clicks)])
@@ -95,20 +88,32 @@
     [:div
      [:button {:on-click (fn []
                            (google-sign-in))}
-      "Sign in with Google!"]
-     [:button {:on-click (fn []
-                           (save-clicks "rUpQthyR4yVqnpGcCOpmyOrJpyx2" 1337))} "Unauthorized click"]]))
+      "Sign in with Google!"]]))
 
-(defn title []
-  (let [name (re-frame/subscribe [::subs/name])]
-    [re-com/title
-     :label (str "Hello from " @name)
-     :level :level1]))
+(def no-username-view
+  (let [new-username (r/atom "")
+        user-uid (re-frame/subscribe [::subs/user-uid])]
+    (fn []
+      [:div 
+        [:div
+          "Welcome newbie. Please choose a username."
+          [:input {:type "text" :id "username-input" :on-change #(reset! new-username (-> % .-target .-value))}]
+          [:button {:on-click (fn [] 
+                                (.updateProfile (.-currentUser (.auth js/firebase)) (js-obj "displayName" @new-username))
+                                (re-frame/dispatch [::events/set-username @new-username])
+                                (save-username-uid @user-uid @new-username))} "Save"]]
+        logout-button])))
 
 (defn main-panel []
   (let [username (re-frame/subscribe [::subs/username])
-        logged-in (re-frame/subscribe [::subs/logged-in])]
+        logged-in (re-frame/subscribe [::subs/logged-in])
+        uid (re-frame/subscribe [::subs/user-uid])]
     (fn []
       (if @logged-in
-        [logged-in-view]
+        (do 
+          (get-username!)
+          (get-clicks! @uid)
+          (if (nil? @username)
+            [no-username-view]
+            [logged-in-view]))
         [logged-out-view]))))

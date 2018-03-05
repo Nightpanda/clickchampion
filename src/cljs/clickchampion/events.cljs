@@ -21,7 +21,7 @@
  ::set-username
  (fn [db [_ username]]
    (assoc db :username username)))
-
+   
 (re-frame/reg-event-db
  ::set-clicks
  (fn [db [_ clicks]]

@@ -5,7 +5,7 @@
  ::username
  (fn [db]
    (:username db)))
-
+   
 (re-frame/reg-sub
  ::user-uid
  (fn [db]
