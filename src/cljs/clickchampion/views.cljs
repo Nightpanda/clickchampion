@@ -1,6 +1,5 @@
 (ns clickchampion.views
   (:require [re-frame.core :as re-frame]
-            [re-com.core :as re-com]
             [clickchampion.subs :as subs]
             [clickchampion.events :as events]
             [reagent.core :as r]))
@@ -12,6 +11,21 @@
 (defn save-clicks [uid clicks] (.set (db-ref (str "clicks/" uid)) clicks))
 
 (defn save-username-uid [uid username] (.set (db-ref (str "users/" uid)) username))
+
+
+(defn child-added [path f]
+ (let [ref (db-ref path)
+       a (r/atom nil)]
+   (.on ref "child_added" (fn [x]
+                      (reset! a (.val x))))
+   (r/create-class
+     {:display-name "listener"
+      :component-will-unmount
+      (fn will-unmount-listener [this]
+        (.off ref))
+      :reagent-render
+      (fn render-listener [args]
+        (into [f a] args))})))
 
 (defn on [path f]
  (let [ref (db-ref path)
@@ -104,16 +118,36 @@
                                 (save-username-uid @user-uid @new-username))} "Save"]]
         logout-button])))
 
+(defn leaderboard []
+    (fn []
+      [:div
+        [on (str "users/") 
+              (fn [a]
+                (let [users (js->clj @a)
+                      ]
+                  (if (some? users)
+                    [:ul
+                      (for [user users]
+                        (let [uid (key user)]
+                          ^{:key user} [:li "Name " user 
+                                            [on (str "clicks/" uid) 
+                                              (fn [a]
+                                                (let [current-clicks (if (nil? @a) 0 @a)]
+                                                  [:div " Score "  current-clicks]))]]))])))]]))
+
 (defn main-panel []
   (let [username (re-frame/subscribe [::subs/username])
         logged-in (re-frame/subscribe [::subs/logged-in])
         uid (re-frame/subscribe [::subs/user-uid])]
     (fn []
-      (if @logged-in
-        (do 
-          (get-username!)
-          (get-clicks! @uid)
-          (if (nil? @username)
-            [no-username-view]
-            [logged-in-view]))
-        [logged-out-view]))))
+      [:div 
+        (if @logged-in
+          (do 
+            (get-username!)
+            (get-clicks! @uid)
+            (if (nil? @username)
+              [no-username-view]
+              [logged-in-view]))
+          [logged-out-view])
+        [leaderboard]])))
+        
