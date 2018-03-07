@@ -8,10 +8,9 @@
 
 (defn db-ref [path] (.ref db (str "/" path)))
 
-(defn save-clicks [uid clicks] (.set (db-ref (str "clicks/" uid)) clicks))
+(defn save-clicks [uid clicks] (.set (db-ref (str "users/" uid "/clicks")) clicks))
 
-(defn save-username-uid [uid username] (.set (db-ref (str "users/" uid)) username))
-
+(defn save-username-uid [uid username] (.set (db-ref (str "users/" uid "/username")) username))
 
 (defn child-added [path f]
  (let [ref (db-ref path)
@@ -43,13 +42,13 @@
 
 (defn get-username! []
   (let [uid (re-frame/subscribe [::subs/user-uid])]
-    (.once (db-ref (str "users/" @uid))
+    (.once (db-ref (str "users/" @uid "/username"))
       "value"
       (fn received-db [snapshot]
         (re-frame/dispatch [::events/set-username (.val snapshot)])))))
 
 (defn get-clicks! [uid]
-  (.once (db-ref (str "clicks/" uid))
+  (.once (db-ref (str "users/" uid "/clicks"))
     "value"
     (fn received-db [snapshot]  
       (re-frame/dispatch [::events/set-clicks (.val snapshot)]))))
@@ -86,15 +85,15 @@
     (fn []
       [:div
         [:p "Welcome back! " @username]
-          [on (str "clicks/" @user-uid) 
+          [on (str "users/" @user-uid "/clicks") 
             (fn [a]
               (let [current-clicks (if (nil? @a) 0 @a)]
+                (re-frame/dispatch [::events/set-clicks current-clicks])
                 [:div "Your clicks: " current-clicks]))]
         [:button {:on-click 
                     (fn []
-                      (do (re-frame/dispatch [::events/set-clicks (inc @clicks)])
-                      (save-clicks @user-uid (inc @clicks))))}
-        "Click me"]
+                      (save-clicks @user-uid (inc @clicks)))}
+        "Click!"]
        logout-button])))
 
 (defn logged-out-view []
@@ -115,25 +114,25 @@
           [:button {:on-click (fn [] 
                                 (.updateProfile (.-currentUser (.auth js/firebase)) (js-obj "displayName" @new-username))
                                 (re-frame/dispatch [::events/set-username @new-username])
-                                (save-username-uid @user-uid @new-username))} "Save"]]
+                                (save-username-uid @user-uid @new-username)
+                                (save-clicks @user-uid 0))} "Save"]]
         logout-button])))
 
 (defn leaderboard []
     (fn []
       [:div
-        [on (str "users/") 
-              (fn [a]
-                (let [users (js->clj @a)
-                      ]
-                  (if (some? users)
-                    [:ul
-                      (for [user users]
-                        (let [uid (key user)]
-                          ^{:key user} [:li "Name " user 
-                                            [on (str "clicks/" uid) 
-                                              (fn [a]
-                                                (let [current-clicks (if (nil? @a) 0 @a)]
-                                                  [:div " Score "  current-clicks]))]]))])))]]))
+        [:h3 "Leaderboard"]
+        [on (str "users/")
+          (fn [a]
+            (let [users (js->clj @a)]
+              (if (some? users)
+                [:ul
+                  (for [db-user users]
+                    (let [uid (key db-user)
+                          user (val db-user)
+                          clicks (first (vals user))
+                          username (last (vals user))]
+                      ^{:key uid} [:li username " " clicks]))])))]]))
 
 (defn main-panel []
   (let [username (re-frame/subscribe [::subs/username])
