@@ -12,20 +12,6 @@
 
 (defn save-username-uid [uid username] (.set (db-ref (str "users/" uid "/username")) username))
 
-(defn child-added [path f]
- (let [ref (db-ref path)
-       a (r/atom nil)]
-   (.on ref "child_added" (fn [x]
-                      (reset! a (.val x))))
-   (r/create-class
-     {:display-name "listener"
-      :component-will-unmount
-      (fn will-unmount-listener [this]
-        (.off ref))
-      :reagent-render
-      (fn render-listener [args]
-        (into [f a] args))})))
-
 (defn on [path f]
  (let [ref (db-ref path)
        a (r/atom nil)]
@@ -124,15 +110,13 @@
         [:h3 "Leaderboard"]
         [on (str "users/")
           (fn [a]
-            (let [users (js->clj @a)]
+            (let [users (js->clj @a :keywordize-keys true)]
               (if (some? users)
                 [:ul
-                  (for [db-user users]
-                    (let [uid (key db-user)
-                          user (val db-user)
-                          clicks (first (vals user))
-                          username (last (vals user))]
-                      ^{:key uid} [:li username " " clicks]))])))]]))
+                  (for [user (reverse (sort-by :clicks (map #(val %) users)))]
+                    (let [clicks (:clicks user)
+                          username (:username user)]
+                      ^{:key (random-uuid)} [:li username " " clicks]))])))]]))
 
 (defn main-panel []
   (let [username (re-frame/subscribe [::subs/username])
