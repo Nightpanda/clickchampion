@@ -5,6 +5,9 @@
                  [re-frame "0.10.5"]
                  [com.andrewmcveigh/cljs-time "0.5.0"]
                  [org.clojure/core.async "0.2.391"]
+                 [cljsjs/react "15.6.1-1"]
+                 [cljsjs/react-dom "15.6.1-1"]
+                 [cljs-react-material-ui "0.2.50"]
                  [re-com "2.1.0"]]
 
   :plugins [[lein-cljsbuild "1.1.5"]]
